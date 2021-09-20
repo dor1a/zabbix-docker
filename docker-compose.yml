@@ -1,0 +1,230 @@
+version: '3.8'
+services:
+  zabbix-server:
+    image: zabbix/zabbix-server-mysql:ubuntu-5.4-latest
+    container_name: zabbix-server
+    hostname: zabbix-server
+    restart: always
+    ports:
+      - "10051:10051"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ./data/usr/lib/zabbix/alertscripts:/usr/lib/zabbix/alertscripts:ro
+      - ./data/usr/lib/zabbix/externalscripts:/usr/lib/zabbix/externalscripts:ro
+      - ./data/var/lib/zabbix/export:/var/lib/zabbix/export:rw
+      - ./data/var/lib/zabbix/modules:/var/lib/zabbix/modules:ro
+      - ./data/var/lib/zabbix/enc:/var/lib/zabbix/enc:ro
+      - ./data/var/lib/zabbix/ssh_keys:/var/lib/zabbix/ssh_keys:ro
+      - ./data/var/lib/zabbix/mibs:/var/lib/zabbix/mibs:ro
+      - ./data/var/lib/zabbix/snmptraps:/var/lib/zabbix/snmptraps:rw
+    env_file:
+      - ./.env/.env_db_mysql
+      - ./.env/.env_srv
+    secrets:
+      - MYSQL_USER
+      - MYSQL_PASSWORD
+      - MYSQL_ROOT_PASSWORD
+    networks:
+      backend:
+        aliases:
+          - zabbix-server
+      frontend:
+    stop_grace_period: 30s
+    sysctls:
+      - net.ipv4.ip_local_port_range=1024 65000
+      - net.ipv4.conf.all.accept_redirects=0
+      - net.ipv4.conf.all.secure_redirects=0
+      - net.ipv4.conf.all.send_redirects=0
+    labels:
+      com.zabbix.description: "Zabbix server with MySQL database support"
+      com.zabbix.company: "Zabbix LLC"
+      com.zabbix.component: "zabbix-server"
+      com.zabbix.dbtype: "mysql"
+      com.zabbix.os: "ubuntu"
+
+  zabbix-web-nginx-mysql:
+    image: zabbix/zabbix-web-nginx-mysql:ubuntu-5.4-latest
+    container_name: zabbix-web-nginx-mysql
+    hostname: zabbix-web-nginx-mysql
+    restart: always
+    ports:
+      - "8080:8080"
+#      - "8443:8443"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ./data/etc/ssl/nginx:/etc/ssl/nginx:ro
+      - ./data/usr/share/zabbix/modules/:/usr/share/zabbix/modules/:ro
+    env_file:
+      - ./.env/.env_db_mysql
+      - ./.env/.env_web
+    secrets:
+      - MYSQL_USER
+      - MYSQL_PASSWORD
+    depends_on:
+      - zabbix-server
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      backend:
+        aliases:
+          - zabbix-web-nginx-mysql
+      frontend:
+    stop_grace_period: 10s
+    sysctls:
+      - net.core.somaxconn=65535
+    labels:
+      com.zabbix.description: "Zabbix frontend on Nginx web-server with MySQL database support"
+      com.zabbix.company: "Zabbix LLC"
+      com.zabbix.component: "zabbix-frontend"
+      com.zabbix.webserver: "nginx"
+      com.zabbix.dbtype: "mysql"
+      com.zabbix.os: "ubuntu"
+
+  zabbix-agent2:
+    image: zabbix/zabbix-agent2:ubuntu-5.4-latest
+    container_name: zabbix-agent2
+    hostname: zabbix-agent2
+    restart: always
+    profiles:
+      - all
+    ports:
+      - "10050:10050"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ./data/etc/zabbix/zabbix_agentd.d:/etc/zabbix/zabbix_agentd.d:ro
+      - ./data/var/lib/zabbix/modules:/var/lib/zabbix/modules:ro
+      - ./data/var/lib/zabbix/enc:/var/lib/zabbix/enc:ro
+      - ./data/var/lib/zabbix/ssh_keys:/var/lib/zabbix/ssh_keys:ro
+    env_file:
+      - ./.env/.env_agent2
+    privileged: true
+    pid: "host"
+    networks:
+      backend:
+        aliases:
+          - zabbix-agent2
+    stop_grace_period: 5s
+    labels:
+      com.zabbix.description: "Zabbix agent"
+      com.zabbix.company: "Zabbix LLC"
+      com.zabbix.component: "zabbix-agentd"
+      com.zabbix.os: "ubuntu"
+
+  zabbix-java-gateway:
+    image: zabbix/zabbix-java-gateway:ubuntu-5.4-latest
+    container_name: zabbix-java-gateway
+    hostname: zabbix-java-gateway
+    restart: always
+    profiles:
+      - all
+    ports:
+      - "10052:10052"
+    volumes:
+      - ./data/usr/sbin/zabbix_java/ext_lib:/usr/sbin/zabbix_java/ext_lib:rw
+    env_file:
+      - ./.env/.env_java
+    networks:
+      backend:
+        aliases:
+          - zabbix-java-gateway
+    stop_grace_period: 5s
+    labels:
+      com.zabbix.description: "Zabbix Java Gateway"
+      com.zabbix.company: "Zabbix LLC"
+      com.zabbix.component: "java-gateway"
+      com.zabbix.os: "ubuntu"
+
+  zabbix-snmptraps:
+    image: zabbix/zabbix-snmptraps:ubuntu-5.4-latest
+    container_name: zabbix-snmptraps
+    hostname: zabbix-snmptraps
+    restart: always
+    profiles:
+      - all
+    ports:
+      - "162:1162/udp"
+    volumes:
+      - ./data/var/lib/zabbix/snmptraps:/var/lib/zabbix/snmptraps:rw
+    networks:
+      frontend:
+        aliases:
+          - zabbix-snmptraps
+      backend:
+    stop_grace_period: 5s
+    labels:
+      com.zabbix.description: "Zabbix snmptraps"
+      com.zabbix.company: "Zabbix LLC"
+      com.zabbix.component: "snmptraps"
+      com.zabbix.os: "ubuntu"
+
+  zabbix-web-service:
+    image: zabbix/zabbix-web-service:ubuntu-5.4-latest
+    container_name: zabbix-web-service
+    hostname: zabbix-web-service
+    restart: always
+    profiles:
+      - all
+    ports:
+      - "10053:10053"
+    volumes:
+      - ./data/var/lib/zabbix/enc:/var/lib/zabbix/enc:ro
+    cap_add:
+      - SYS_ADMIN
+    env_file:
+      - ./.env/.env_web_service
+    networks:
+      backend:
+        aliases:
+          - zabbix-web-service
+    stop_grace_period: 5s
+    labels:
+      com.zabbix.description: "Zabbix web service"
+      com.zabbix.company: "Zabbix LLC"
+      com.zabbix.component: "web-service"
+      com.zabbix.os: "ubuntu"
+
+#  elasticsearch:
+#    image: elasticsearch:7.14.1
+#    container_name: zabbix-elasticsearch
+#    hostname: zabbix-elasticsearch
+#    restart: always
+#    profiles:
+#      - all
+#    environment:
+#      - transport.host=0.0.0.0
+#      - discovery.zen.minimum_master_nodes=1
+#    networks:
+#      backend:
+#        aliases:
+#          - elasticsearch
+
+networks:
+  frontend:
+    driver: bridge
+    driver_opts:
+      com.docker.network.enable_ipv6: "false"
+    ipam:
+      driver: default
+      config:
+      - subnet: 172.18.254.0/24
+  backend:
+    driver: bridge
+    driver_opts:
+      com.docker.network.enable_ipv6: "false"
+    internal: true
+    ipam:
+      driver: default
+      config:
+      - subnet: 172.18.253.0/24
+
+secrets:
+  MYSQL_USER:
+    file: ./.env/.MYSQL_USER
+  MYSQL_PASSWORD:
+    file: ./.env/.MYSQL_PASSWORD
+  MYSQL_ROOT_PASSWORD:
+    file: ./.env/.MYSQL_ROOT_PASSWORD
