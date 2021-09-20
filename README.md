@@ -1,2 +1,2 @@
 # zabbix-docker
-Used docker-compose without mysql or mariadb configuration
+Used docker-compose without mysql & mariadb configuration
