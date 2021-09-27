@@ -210,7 +210,7 @@ networks:
     ipam:
       driver: default
       config:
-      - subnet: 172.18.254.0/24
+        - subnet: 172.18.254.0/24
   backend:
     driver: bridge
     driver_opts:
@@ -219,7 +219,7 @@ networks:
     ipam:
       driver: default
       config:
-      - subnet: 172.18.253.0/24
+        - subnet: 172.18.253.0/24
 
 secrets:
   MYSQL_USER:
